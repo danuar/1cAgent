@@ -45,7 +45,7 @@ deploy_extension_from_files/run_tests/verify_extension — тоже job_id, см
 только импортирует src/tools/*.py (регистрирует @mcp.tool() по побочному эффекту
 импорта) и запускает mcp.run().
 """
-from src.tools.core import mcp
+from src.tools.core import mcp, CFG
 import src.tools.module_tools    # noqa: F401 — регистрация @mcp.tool()
 import src.tools.session_tools   # noqa: F401
 import src.tools.deploy_tools    # noqa: F401
@@ -56,4 +56,14 @@ import src.tools.metadata_tools  # noqa: F401
 import src.tools.reference_tools # noqa: F401
 
 if __name__ == "__main__":
+    # #60: автозапуск ИИ-моделей ВМЕСТЕ с сервером (см. bootstrap.py::
+    # ensure_models_running) — best-effort, НИКОГДА не должен помешать
+    # серверу подняться (та же грациозная деградация, что для LM Studio уже
+    # была раньше) — поэтому дополнительный try/except СНАРУЖИ, хотя сама
+    # функция и так не бросает исключений наружу.
+    try:
+        from src.onec.bootstrap import ensure_models_running
+        ensure_models_running(CFG)
+    except Exception:
+        pass
     mcp.run()   # stdio

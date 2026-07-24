@@ -12,5 +12,12 @@ tools/*.jar
 tools/*.cfe
 tools/llama-server/
 
+main.py
+
 .idea/
 *.log
+
+# содержит настоящий (не локальный) API-ключ Google Gemini в открытом виде —
+# см. HANDOFF.md/чат: старый агент, не запускается вместе с MCP-сервером,
+# НЕ должен попасть в git ни при каком широком `git add`.
+main.py

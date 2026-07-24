@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-#54: клиент к OpenAI-совместимому /v1/embeddings LM Studio. Переиспользует
-LM_BASE/LM_KEY из fixer.py (та же локальная LM Studio, тот же ключ) — БЕЗ
-зависимости от роли фиксера: embeddinggemma-300M — ОТДЕЛЬНАЯ модель, грузится
-ОДНОВРЕМЕННО с Qwen2.5-Coder-7B (проверено вживую пользователем: обе модели
-разом умещаются в 8ГБ VRAM при контексте фиксера 32К — см. HANDOFF #54).
+#54: клиент к OpenAI-совместимому /v1/embeddings. БЕЗ зависимости от роли
+фиксера (НЕ импортирует fixer.py — тот сам импортирует config.py, импорт в
+обратную сторону создал бы цикл config->bootstrap->...; оба берут LM_KEY/URL
+из config.py независимо): embeddinggemma-300M — ОТДЕЛЬНАЯ модель.
+
+#60: URL теперь EMBED_MODEL_BASE_URL из config.py, НЕ обязательно тот же порт,
+что у фиксера — при backend="lmstudio" оба на одном порту (проверено вживую:
+обе модели разом умещаются в 8ГБ VRAM при контексте фиксера 32К — см. HANDOFF
+#54), при backend="llama_server" — у эмбеддингов СВОЙ порт (один llama-server
+процесс = одна модель, см. ensure_models_running).
 
 Модель подтверждена реальным запросом: POST /v1/embeddings,
 model="text-embedding-embeddinggemma-300m" -> 768-мерный вектор, ~9.5-10мс на
@@ -14,9 +19,8 @@ model="text-embedding-embeddinggemma-300m" -> 768-мерный вектор, ~9.
 import json
 import urllib.request
 
-from src.onec.fixer import LM_BASE, LM_KEY
+from src.core.config import EMBED_MODEL_BASE_URL as LM_BASE, LM_KEY, EMBED_MODEL_LMS_KEY as EMBED_MODEL
 
-EMBED_MODEL = "text-embedding-embeddinggemma-300m"
 BATCH_SIZE = 256  # #54: эмпирически — 256-512 уже плато (~9.5-10мс/чанк), больше не ускоряет
 
 

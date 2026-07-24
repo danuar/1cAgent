@@ -8,8 +8,10 @@
 import json, re, time, urllib.request
 
 # --- LM Studio ---
-LM_BASE = "http://localhost:1235/v1"
-LM_KEY = "sk-lm-FQkn7Xhd:yYxzccoJ7B04iFDN8hu5"  # локальный ключ
+# #60: LM_BASE/LM_KEY теперь ИЗ config.py (единый источник для всего проекта,
+# включая embeddings_client.py) — было захардкожено прямо тут, вынесено при
+# добавлении второй модели (эмбеддинги) на СВОЙ порт для backend="llama_server".
+from src.core.config import FIXER_MODEL_BASE_URL as LM_BASE, LM_KEY  # noqa: E402
 TEMPERATURE = 0.15
 MAX_TOKENS = 1200
 
