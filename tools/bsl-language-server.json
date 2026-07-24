@@ -1,0 +1,9 @@
+{
+  "diagnostics": {
+    "metadata": {
+      "MissingCodeTryCatchEx": {
+        "lspSeverity": "Information"
+      }
+    }
+  }
+}

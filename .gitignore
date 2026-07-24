@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+
+# служебное/генерируемое (дампы конфигурации, логи, телеметрия) — не проектный код
+runtime/
+# рабочие ИБ-песочницы (TestDB15/MetaTemplates/CompilerDB) + генерируемые логи/epf
+work/
+
+# сторонние лицензионные/скачиваемые бинарники — см. README "Установка"
+tools/*.jar
+tools/*.cfe
+tools/llama-server/
+
+.idea/
+*.log

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "1c-agent": {
+      "command": "C:\\path\\to\\1cAgent\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\path\\to\\1cAgent\\mcp_server.py"]
+    }
+  }
+}
