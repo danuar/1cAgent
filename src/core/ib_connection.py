@@ -32,11 +32,17 @@ def cli_connection_str(conn: str) -> str:
     ValueError, если не удалось разобрать (нет ни File, ни Srvr+Ref).
     """
     p = parse_connection_string(conn)
+    ws = p.get("ws") or p.get("WS") or p.get("Ws")
     frag = []
     if p.get("File"):
         frag.append(f'/F "{p["File"]}"')
     elif p.get("Srvr") and p.get("Ref"):
         frag.append(f'/S "{p["Srvr"]}\\{p["Ref"]}"')
+    elif ws:
+        # веб-база (тонкий клиент через HTTP-публикацию). ТОЛЬКО ENTERPRISE:
+        # КОНФИГУРАТОР по ws не подключается в принципе — все DESIGNER-инструменты
+        # (deploy_*, dump_*) с такой строкой не работают.
+        frag.append(f'/WS "{ws}"')
     else:
         raise ValueError(
             f'не удалось разобрать строку подключения: {conn!r} — нужно '

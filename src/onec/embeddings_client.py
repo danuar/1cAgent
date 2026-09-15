@@ -40,14 +40,40 @@ def embed_batch(texts: list, model: str = EMBED_MODEL, timeout: int = 120) -> li
     return [item["embedding"] for item in data["data"]]
 
 
-def embeddings_available(model: str = EMBED_MODEL, timeout: float = 2.0) -> bool:
-    """Быстрая проверка, что LM Studio поднят И модель эмбеддингов реально загружена
-    (не только Qwen) — тот же паттерн, что fixer.qwen_available()."""
+_autostart_tried = False
+
+
+def _autostart_once() -> bool:
+    """#62: ленивая загрузка эмбеддинг-модели — см. fixer._autostart_once."""
+    global _autostart_tried
+    if _autostart_tried:
+        return False
+    _autostart_tried = True
     try:
-        req = urllib.request.Request(LM_BASE + "/models",
-            headers={"Authorization": "Bearer " + LM_KEY})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read())
-        return any(m.get("id") == model for m in data.get("data", []))
+        from src.core.config import CFG
+        from src.onec.bootstrap import ensure_models_running
+        ensure_models_running(CFG, need={"embed"})
+        return True
     except Exception:
         return False
+
+
+def embeddings_available(model: str = EMBED_MODEL, timeout: float = 2.0,
+                         autostart: bool = True) -> bool:
+    """Быстрая проверка, что LM Studio поднят И модель эмбеддингов реально загружена
+    (не только Qwen) — тот же паттерн, что fixer.qwen_available()."""
+    def _probe(t: float) -> bool:
+        try:
+            req = urllib.request.Request(LM_BASE + "/models",
+                headers={"Authorization": "Bearer " + LM_KEY})
+            with urllib.request.urlopen(req, timeout=t) as r:
+                data = json.loads(r.read())
+            return any(m.get("id") == model for m in data.get("data", []))
+        except Exception:
+            return False
+
+    if _probe(timeout):
+        return True
+    if autostart and _autostart_once():
+        return _probe(max(timeout, 5.0))
+    return False

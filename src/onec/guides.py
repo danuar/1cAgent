@@ -689,6 +689,89 @@ UUID объекта в основной конфигурации, и работ�
 Пустой /Out-лог НЕ значит успех сам по себе — проверяйте returncode, при
 сомнении перепроверьте повторным DumpConfigToFiles.
 """,
+    "extension_forms": """Формы в РАСШИРЕНИИ: куда класть обработчик любого события формы/элемента.
+Источник фактов: дамп ERP АПК (57 023 привязки <Event> в Documents/Catalogs/
+CommonForms) + рабочее расширение к Справочник.ДоговорыКонтрагентов (УНФ).
+
+1. ПРИВЯЗКА ЖИВЁТ В Ext/Form.xml, тег <Events>.
+   Событие САМОЙ ФОРМЫ — на верхнем уровне, между </AutoCommandBar> и <ChildItems>:
+       <Events>
+           <Event name="OnCreateAtServer" callType="After">Прф_ПриСозданииНаСервереПосле</Event>
+       </Events>
+   Событие ЭЛЕМЕНТА — ВНУТРИ тега элемента, последним потомком (после DataPath,
+   ContextMenu, ExtendedTooltip):
+       <InputField name="ТоварыНоменклатура" id="470">
+           <DataPath>Объект.Товары.Номенклатура</DataPath>
+           <ContextMenu name="..." id="471"/>
+           <ExtendedTooltip name="..." id="1195"/>
+           <Events>
+               <Event name="OnChange">ТоварыНоменклатураПриИзменении</Event>
+           </Events>
+       </InputField>
+   Теги-носители событий: InputField, CheckBoxField, LabelDecoration, Table,
+   UsualGroup, Page, Pages, ColumnGroup, ContextMenu, ExtendedTooltip.
+   callType — ТОЛЬКО для расширения: After / Before / Instead = &После / &Перед /
+   &Вместо (в основной конфигурации атрибута нет). Имя процедуры — с префиксом
+   расширения, сама процедура лежит в Ext/Form/Module.bsl расширения.
+
+2. ИМЕНА СОБЫТИЙ (XML name -> имя в BSL), по убыванию частоты в ERP:
+   OnChange=ПриИзменении               OnCreateAtServer=ПриСозданииНаСервере
+   StartChoice=НачалоВыбора            OnOpen=ПриОткрытии
+   ChoiceProcessing=ОбработкаВыбора    NotificationProcessing=ОбработкаОповещения
+   OnActivateRow=ПриАктивизацииСтроки  Selection=Выбор
+   Click=Нажатие                       OnReadAtServer=ПриЧтенииНаСервере
+   Clearing=Очистка                    AfterWriteAtServer=ПослеЗаписиНаСервере
+   URLProcessing=ОбработкаНавигационнойСсылки      AfterWrite=ПослеЗаписи
+   BeforeWriteAtServer=ПередЗаписьюНаСервере       AutoComplete=АвтоПодбор
+   OnStartEdit=ПриНачалеРедактирования BeforeAddRow=ПередНачаломДобавления
+   BeforeDeleteRow=ПередУдалением      AfterDeleteRow=ПослеУдаления
+   FillCheckProcessingAtServer=ОбработкаПроверкиЗаполненияНаСервере
+   TextEditEnd=ОкончаниеВводаТекста    BeforeClose=ПередЗакрытием
+   OnEditEnd=ПриОкончанииРедактирования            OnClose=ПриЗакрытии
+   BeforeWrite=ПередЗаписью            Opening=Открытие
+   Tuning=Регулирование                BeforeEditEnd=ПередОкончаниемРедактирования
+   OnCurrentPageChange=ПриСменеСтраницы            OnWriteAtServer=ПриЗаписиНаСервере
+   BeforeRowChange=ПередНачаломИзменения           Creating=Создание
+   OnGetDataAtServer=ПриПолученииДанныхНаСервере   OnActivateCell=ПриАктивизацииЯчейки
+   Drag=Перетаскивание                 DragCheck=ПроверкаПеретаскивания
+   DragStart=НачалоПеретаскивания      DragEnd=ОкончаниеПеретаскивания
+   ValueChoice=ВыборЗначения           NewWriteProcessing=ОбработкаЗаписиНового
+   EditTextChange=ИзменениеТекстаРедактирования    OnClick=ПриНажатии
+   StartListChoice=НачалоВыбораИзСписка            OnActivate=ПриАктивизацииОбласти
+   DetailProcessing=ОбработкаРасшифровки           OnActivateField=ПриАктивизацииПоля
+   BeforeExpand=ПередРазворачиванием   BeforeCollapse=ПередСворачиванием
+   OnReopen=ПриПовторномОткрытии       ExternalEvent=ВнешнееСобытие
+   DocumentComplete=ДокументСформирован            NavigationProcessing=ОбработкаПерехода
+   OnPeriodOutput=ПриВыводеПериода     OnChangeAreaContent=ПриИзмененииСодержимогоОбласти
+   AdditionalDetailProcessing=ОбработкаДополнительнойРасшифровки
+   Настройки/варианты СКД: BeforeLoadUserSettingsAtServer, OnLoadUserSettingsAtServer,
+   OnSaveUserSettingsAtServer, BeforeLoadDataFromSettingsAtServer,
+   OnLoadDataFromSettingsAtServer, OnSaveDataInSettingsAtServer,
+   OnUpdateUserSettingSetAtServer, BeforeLoadVariantAtServer,
+   OnLoadVariantAtServer, OnSaveVariantAtServer — имя в BSL = дословный перевод.
+
+3. СВОИ элементы, созданные ПРОГРАММНО (Элементы.Добавить в ПриСозданииНаСервере),
+   в Form.xml не попадают — обработчик вешается кодом, русским именем события:
+       Колонка.УстановитьДействие("ПриИзменении", "Прф_ТоварыЦенаПриИзменении");
+   Процедура-обработчик — &НаКлиенте.
+
+4. ГРАБЛИ (все пойманы вживую):
+   - Реквизиты, добавленные через ИзменитьРеквизиты, НЕЛЬЗЯ читать/писать через
+     точку: компилятор молча считает их новой локальной переменной, в рантайме
+     "Преобразование значения к типу Число не может быть выполнено". Только
+     ЭтаФорма["Прф_ИтогСумма"]. В строковых свойствах (ПутьКДаннымПодвала)
+     имя пишется как есть.
+   - Процедура БЕЗ директивы в модуле управляемой формы компилируется &НаСервере:
+     вызов из клиента станет серверным рейс-трипом на каждый ввод.
+   - Итоги в подвале платформа сама не считает для таблицы, связанной с ТЧ объекта
+     (авто-итоги есть только у динамического списка): реквизит формы +
+     Элементы.Таблица.Подвал = Истина + Колонка.ПутьКДаннымПодвала + пересчёт руками.
+   - Полное имя формы для ОткрытьФорму/ПолучитьФорму — с сегментом "Форма":
+     "Справочник.ДоговорыКонтрагентов.Форма.ФормаЭлемента". Без него —
+     "Неизвестное имя формы". ПолучитьФорму только СОЗДАЁТ объект; чтобы увидеть
+     форму на экране — .Открыть() или сразу ОткрытьФорму(). До .Открыть() можно
+     подготовить форму: ТекущаяСтраница, ТекущийЭлемент, заполнить Объект.<ТЧ>.
+""",
 }
 
 

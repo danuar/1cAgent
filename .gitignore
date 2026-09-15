@@ -4,8 +4,19 @@ __pycache__/
 
 # служебное/генерируемое (дампы конфигурации, логи, телеметрия) — не проектный код
 runtime/
-# рабочие ИБ-песочницы (TestDB15/MetaTemplates/CompilerDB) + генерируемые логи/epf
-work/
+# рабочие ИБ-песочницы (TestDB15/CompilerDB) + генерируемые логи/epf — НЕ в git.
+# CompilerDB НЕ нужен: bootstrap.py::ensure_compiler_db создаёт его САМ через
+# CREATEINFOBASE при первом warmup/run_module (см. HANDOFF). TestDB15 — личная
+# тестовая база автора, у каждого своя.
+# Исключение: work/ВнешняяОбработкаИИАгентВыполнение(.xml) — это НЕ генерируется
+# кодом, а наоборот ЧИТАЕТСЯ (glue.py::_build, LoadExternalDataProcessorOrReportFromFiles)
+# при КАЖДОЙ сборке AgentCode.epf — без этой затравки run_module/heal_module/
+# warmup не соберут headless-обработку на чистой машине.
+work/*
+!work/ВнешняяОбработкаИИАгентВыполнение.xml
+!work/ВнешняяОбработкаИИАгентВыполнение/
+!work/ВнешняяОбработкаИИАгентВыполнение/Ext/
+!work/ВнешняяОбработкаИИАгентВыполнение/Ext/ObjectModule.bsl
 
 # сторонние лицензионные/скачиваемые бинарники — см. README "Установка"
 tools/*.jar
@@ -21,3 +32,11 @@ main.py
 # см. HANDOFF.md/чат: старый агент, не запускается вместе с MCP-сервером,
 # НЕ должен попасть в git ни при каком широком `git add`.
 main.py
+
+# личное: адрес МОЕГО прокси/раннера и мусор рядом — не для чужих клонов
+Адрес_раннера_в_буфер.bat
+token.txt
+work.zip
+/http
+*.epf.bak
+*.before90

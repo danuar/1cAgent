@@ -28,7 +28,9 @@ import subprocess
 import threading
 import time
 
-from src.core.ib_connection import cli_connection_str
+from pathlib import Path
+
+from src.core.ib_connection import cli_connection_str, parse_connection_string
 from src.onec.sessions import kill_matching_processes, find_matching_processes
 from src.onec.glue import Real1CRunner
 from src.core.screenshot_1c import find_1c_window, capture_window, ocr_text as _ocr_text
@@ -56,7 +58,15 @@ def launch_runner(cfg: dict, ib_connection: str) -> dict:
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
 
-    cmd = f'"{cfg["path_1c"]}" ENTERPRISE {conn} /Execute "{cfg["epf_runner"]}" /C"{cfg["work_dir"]}"'
+    # #63: для веб-базы (ws=) нужен ТОНКИЙ клиент — толстый 1cv8.exe по ws не
+    # подключается в принципе, и раннер в такой базе поднимался бы только
+    # руками. Для файловых/серверных баз оставляем толстый, как было.
+    parsed = parse_connection_string(ib_connection)
+    is_ws = bool(parsed.get("ws") or parsed.get("WS") or parsed.get("Ws"))
+    exe = (cfg.get("path_1c_run_thin") if is_ws else cfg.get("path_1c_run")) or cfg["path_1c"]
+    if is_ws and not Path(exe).exists():
+        return {"ok": False, "reason": f"нужен тонкий клиент для ws-базы, а его нет: {exe}"}
+    cmd = f'"{exe}" ENTERPRISE {conn} /Execute "{cfg["epf_runner"]}" /C"{cfg["work_dir"]}"'
     try:
         proc = subprocess.Popen(cmd, shell=True)
     except Exception as e:

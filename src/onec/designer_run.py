@@ -34,17 +34,35 @@ import subprocess
 import time
 
 from src.onec.sessions import find_matching_processes
-from src.core.screenshot_1c import find_1c_window, capture_window, ocr_text as _ocr_text
+from src.core.screenshot_1c import (find_1c_window, _enum_1c_windows, capture_window,
+                                    ocr_text as _ocr_text)
 
 # Тот же список маркеров, что в runner_launch._looks_like_dialog (#42) — держим
 # отдельной копией здесь, т.к. designer_run обслуживает DESIGNER-вызовы
 # (нет своей "формы-раннера", поэтому не нужен _RUNNER_FORM_MARKERS-фильтр).
 _DIALOG_MARKERS = ("продолжить", "отмена", " да ", " нет ", "cancel", " ok", "ошибка")
 
+# ОКНО АВТОРИЗАЦИИ — отдельный случай, и самый частый (поймано вживую 14.09.2026
+# на unf14143_demo: замеры выгрузки шли 928с и 353с вместо ~15с, потому что
+# конфигуратор молча ждал логин, а пользователь жал Enter руками). Причина
+# всегда одна: в команде нет /N и /P, то есть в ib_connection не передали
+# Usr/Pwd. Лечится не убийством процесса, а строкой подключения, поэтому и
+# подсказка должна быть другая.
+_AUTH_MARKERS = ("доступ к информационной базе", "аутентификация", "пароль")
+
+
+def _classify(text: str) -> str:
+    """'' | 'auth' | 'dialog' — что именно показано на экране."""
+    low = (text or "").lower()
+    if any(m in low for m in _AUTH_MARKERS):
+        return "auth"
+    if any(m in low for m in _DIALOG_MARKERS):
+        return "dialog"
+    return ""
+
 
 def _looks_like_dialog(text: str) -> bool:
-    low = (text or "").lower()
-    return any(m in low for m in _DIALOG_MARKERS)
+    return bool(_classify(text))
 
 
 def _kill_tree(pid: int) -> None:
@@ -79,14 +97,24 @@ def run_watched(cmd: str, timeout: int, cfg: dict, ib_connection: str, poll_inte
         try:
             procs = find_matching_processes(ib_connection)
             pids = {p["ProcessId"] for p in procs if p.get("ProcessId")}
-            win = find_1c_window(pids) if pids else None
-            if win is not None:
-                png = capture_window(win["hwnd"])
-                if png is not None:
-                    text = _ocr_text(cfg, png) or ""
-                    if _looks_like_dialog(text):
-                        _kill_tree(proc.pid)
-                        return {"returncode": None, "dialog": True, "hint": text[:300], "timed_out": False}
+            # ВСЕ окна процесса, а не первое: модальное окно (в т.ч.
+            # авторизации) — ОТДЕЛЬНОЕ top-level окно, и find_1c_window
+            # возвращал вместо него пустое главное окно конфигуратора. Именно
+            # поэтому детектор молчал, пока 1С ждала логин.
+            for win in (_enum_1c_windows(pids) if pids else []):
+                # заголовок дешевле OCR и у окна авторизации говорящий
+                kind = _classify(win.get("title") or "")
+                text = ""
+                if not kind:
+                    png = capture_window(win["hwnd"])
+                    if png is not None:
+                        text = _ocr_text(cfg, png) or ""
+                        kind = _classify(text)
+                if kind:
+                    _kill_tree(proc.pid)
+                    hint = ((win.get("title") or "") + " | " + text).strip(" |")
+                    return {"returncode": None, "dialog": True, "kind": kind,
+                            "hint": hint[:300], "timed_out": False}
         except Exception:
             pass  # проверка экрана — best-effort, не должна ронять основной вызов
 
@@ -101,6 +129,13 @@ def watched_error(step: str, watched: dict, timeout: int, **extra) -> dict:
     DESIGNER-вызова не меняется).
     """
     if watched["dialog"]:
+        if watched.get("kind") == "auth":
+            return {"ok": False, "step": "auth_dialog", "at_step": step,
+                    "hint": watched["hint"],
+                    "advice": "1С показала окно АВТОРИЗАЦИИ и ждала логин — процесс убит. "
+                              "В строке подключения нет пользователя: добавьте "
+                              'Usr="Имя";Pwd="пароль"; в ib_connection. Без этого любой '
+                              "пакетный вызов конфигуратора будет висеть до таймаута.", **extra}
         return {"ok": False, "step": "unexpected_dialog", "at_step": step,
                 "hint": watched["hint"],
                 "advice": "похоже на модальный диалог (не обычное выполнение) — процесс уже "

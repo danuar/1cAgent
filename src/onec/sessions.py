@@ -110,6 +110,11 @@ def _load_ibase_registry() -> dict:
     return registry
 
 
+def _ws_url(parsed: dict) -> str:
+    """ws-адрес из разобранного подключения (ключ ws/WS/Ws), в нижнем регистре."""
+    return (parsed.get("ws") or parsed.get("WS") or parsed.get("Ws") or "").lower().rstrip("/")
+
+
 def _connection_matches(parsed_a: dict, parsed_b: dict) -> bool:
     """Совпадают ли два разобранных connection dict по File ИЛИ Srvr+Ref (без учёта регистра)."""
     if parsed_a.get("File") and parsed_b.get("File"):
@@ -117,6 +122,8 @@ def _connection_matches(parsed_a: dict, parsed_b: dict) -> bool:
     if parsed_a.get("Srvr") and parsed_a.get("Ref") and parsed_b.get("Srvr") and parsed_b.get("Ref"):
         return (parsed_a["Srvr"].lower() == parsed_b["Srvr"].lower()
                 and parsed_a["Ref"].lower() == parsed_b["Ref"].lower())
+    if _ws_url(parsed_a) and _ws_url(parsed_b):
+        return _ws_url(parsed_a) == _ws_url(parsed_b)
     return False
 
 
@@ -126,6 +133,8 @@ def _matches(cmdline: str, parsed: dict, ibase_registry: dict = None) -> bool:
         return True
     if (parsed.get("Srvr") and parsed.get("Ref")
             and parsed["Srvr"].lower() in cmdline_low and parsed["Ref"].lower() in cmdline_low):
+        return True
+    if _ws_url(parsed) and _ws_url(parsed) in cmdline_low:
         return True
 
     # #49: запущено через "Список информационных баз" по /IBName — сырого

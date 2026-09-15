@@ -59,20 +59,48 @@ def get_model():
         return json.loads(r.read())["data"][0]["id"]
 
 
-def qwen_available(timeout: float = 2.0) -> bool:
+_autostart_tried = False
+
+
+def _autostart_once(need: str) -> bool:
+    """#62: поднять модель ЛЕНИВО — в момент первой реальной надобности, а не
+    на старте MCP-сервера (раньше модели грузились на каждый чат, даже если
+    фиксер в нём ни разу не звался). Одна попытка на процесс: если LM Studio
+    не установлена/не поднялась, не долбимся в неё на каждый вызов."""
+    global _autostart_tried
+    if _autostart_tried:
+        return False
+    _autostart_tried = True
+    try:
+        from src.core.config import CFG
+        from src.onec.bootstrap import ensure_models_running
+        ensure_models_running(CFG, need={need})
+        return True
+    except Exception:
+        return False
+
+
+def qwen_available(timeout: float = 2.0, autostart: bool = True) -> bool:
     """
     Быстрая проверка, поднят ли LM Studio — ДО того как heal_module/fix_snippet
     попробуют что-то чинить. LM Studio нужен только этим двум инструментам;
     если он выключен, петля должна деградировать грациозно (вернуть Клоду
     прогон без починки), а не падать непонятной ошибкой соединения.
     """
-    try:
-        req = urllib.request.Request(LM_BASE + "/models",
-            headers={"Authorization": "Bearer " + LM_KEY})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status == 200
-    except Exception:
-        return False
+    def _probe(t: float) -> bool:
+        try:
+            req = urllib.request.Request(LM_BASE + "/models",
+                headers={"Authorization": "Bearer " + LM_KEY})
+            with urllib.request.urlopen(req, timeout=t) as r:
+                return r.status == 200
+        except Exception:
+            return False
+
+    if _probe(timeout):
+        return True
+    if autostart and _autostart_once("fixer"):
+        return _probe(max(timeout, 5.0))
+    return False
 
 
 def qwen_fix(code: str, error: str, model: str):

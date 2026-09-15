@@ -21,7 +21,19 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from src.core.config import CFG
 
-mcp = FastMCP("1c-agent")
+# Уходит клиенту в handshake (Claude Code кладёт в системный промпт). Коротко:
+# конвенции, общие для всех инструментов, чтобы не повторять их в каждом docstring.
+INSTRUCTIONS = """\
+1c-agent: BSL в живой 1С через раннер + DESIGNER/ENTERPRISE CLI. Полный бриф — HANDOFF.md в корне проекта.
+Старт: preflight(). Раннер не на связи → попросить человека открыть ВнешняяОбработка.epf в базе.
+ib_connection — строка подключения ТОЛЬКО из чата, явно в каждом вызове; Usr= — точный логин ИБ (list_ib_users), иначе зависание на диалоге.
+Конвенции: «Async» = вернёт job_id, результат job_status(job_id, wait_seconds=55). «Группа A» = нужен живой раннер.
+Деплой-инструменты (deploy_*/sync_*/attach_extension/adopt_*) гасят сессии базы, включая раннер → потом restart_runner; после деплоя базу оставлять свободной, если человек не просил раннер.
+Задание run_module: Процедура ВыполнитьЗадачу(ЛогВыполнения) Экспорт … Сообщить("ГОТОВО"); без вложенных Процедура/Функция и Возврат.
+Файлы править Write/Edit, не bash-heredoc (слэши схлопываются). .epf разбирать только в родной базе. Боевые базы удалённые — файлы туда через upload_file_to_runner.
+Не хватило инструмента / упёрся в ограничение → запись в TASKS.md «Чего не хватило». Новый ручной паттерн → guides.py + инструмент.
+"""
+mcp = FastMCP("1c-agent", instructions=INSTRUCTIONS)
 MAX_CODE_INLINE = 4000
 MAX_OUTPUT = 6000
 _JOBS = {}
@@ -162,19 +174,7 @@ def _spawn(fn, *a, **k):
 
 @mcp.tool()
 def job_status(job_id: str, wait_seconds: int = 0) -> dict:
-    """
-    Статус/результат фоновой задачи (deploy_module/sync_extension_files/
-    deploy_extension_from_files/run_tests/heal_module/fix_snippet).
-
-    wait_seconds > 0 — СОБЫТИЙНО заблокироваться до завершения задачи
-    (threading.Event, не sleep-поллинг) — вернётся СРАЗУ, как только задача
-    закончится, а не ждать полный wait_seconds впустую. Верхний потолок —
-    min(wait_seconds, 55) — строго МЕНЬШЕ типичного клиентского MCP-таймаута,
-    чтобы сам этот вызов не завис (см. HANDOFF.md #26). Если задача не успела
-    за отведённое время — вернётся текущий status="running", вызовите снова
-    (не нужно между вызовами спать/ждать вручную — сам wait_seconds уже ждёт).
-    wait_seconds=0 (по умолчанию) — старое поведение, мгновенный снимок статуса.
-    """
+    """Результат async-задачи. wait_seconds>0 — событийно ждать до min(wait_seconds,55); всё ещё running — вызвать снова."""
     ev = _JOB_EVENTS.get(job_id)
     if ev is not None and wait_seconds > 0:
         ev.wait(timeout=min(wait_seconds, _MAX_WAIT_SECONDS))
